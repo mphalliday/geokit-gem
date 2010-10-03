@@ -219,9 +219,9 @@ module Geokit
       end  
       
       # Template method which does the geocode lookup.
-      def self.do_reverse_geocode(address, options = {})
-        raise ArgumentError('Geocoder.ca requires a GeoLoc argument') unless address.is_a?(GeoLoc)
-        url = construct_request(address, true)
+      def self.do_reverse_geocode(lnglat, options = {})
+        raise ArgumentError('Geocoder.ca requires a GeoLoc argument') unless lnglat.is_a?(GeoLoc)
+        url = construct_request(lnglat, true)
         res = self.call_geocoder_service(url)
         return GeoLoc.new if !res.is_a?(Net::HTTPSuccess)
         xml = res.body
@@ -229,7 +229,7 @@ module Geokit
         # Parse the document.
         doc = REXML::Document.new(xml)    
         
-        parse_result(doc, address)
+        parse_result(doc, lnglat)
       rescue
         logger.error "Caught an error during Geocoder.ca geocoding call: "+$!
         return GeoLoc.new  
