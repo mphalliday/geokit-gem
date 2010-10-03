@@ -211,26 +211,56 @@ module Geokit
         logger.debug "Geocoder.ca geocoding. Address: #{address}. Result: #{xml}"
         # Parse the document.
         doc = REXML::Document.new(xml)    
-        address.lat = doc.elements['//latt'].text
-        address.lng = doc.elements['//longt'].text
-        address.success = true
-        return address
+        
+        parse_result(doc, address)
       rescue
         logger.error "Caught an error during Geocoder.ca geocoding call: "+$!
         return GeoLoc.new  
       end  
-
+      
+      # Template method which does the geocode lookup.
+      def self.do_reverse_geocode(address, options = {})
+        raise ArgumentError('Geocoder.ca requires a GeoLoc argument') unless address.is_a?(GeoLoc)
+        url = construct_request(address, true)
+        res = self.call_geocoder_service(url)
+        return GeoLoc.new if !res.is_a?(Net::HTTPSuccess)
+        xml = res.body
+        logger.debug "Geocoder.ca reverse geocoding. Address: #{lnglat}. Result: #{xml}"
+        # Parse the document.
+        doc = REXML::Document.new(xml)    
+        
+        parse_result(doc, address)
+      rescue
+        logger.error "Caught an error during Geocoder.ca geocoding call: "+$!
+        return GeoLoc.new  
+      end
+      
       # Formats the request in the format acceptable by the CA geocoder.
-      def self.construct_request(location)
+      def self.construct_request(location, reverse = false)
         url = ""
         url += add_ampersand(url) + "stno=#{location.street_number}" if location.street_address
         url += add_ampersand(url) + "addresst=#{Geokit::Inflector::url_escape(location.street_name)}" if location.street_address
         url += add_ampersand(url) + "city=#{Geokit::Inflector::url_escape(location.city)}" if location.city
         url += add_ampersand(url) + "prov=#{location.state}" if location.state
-        url += add_ampersand(url) + "postal=#{location.zip}" if location.zip
+        url += add_ampersand(url) + "postal=#{Geokit::Inflector::url_escape(location.zip)}" if location.zip
         url += add_ampersand(url) + "auth=#{Geokit::Geocoders::geocoder_ca}" if Geokit::Geocoders::geocoder_ca
+        url += add_ampersand(url) + "latt=#{location.lat}" if location.lat
+        url += add_ampersand(url) + "longt=#{location.lng}" if location.lng
+        url += add_ampersand(url) + "reverse=1" if reverse
+        url += add_ampersand(url) + "standard=1" unless reverse
         url += add_ampersand(url) + "geoit=xml"
         'http://geocoder.ca/?' + url
+      end
+      
+      def self.parse_result(result, location)
+        location.lat = result.elements['//latt'].text
+        location.lng = result.elements['//longt'].text
+        location.city = result.elements['//city'].text if result.elements['//city'] && result.elements['//city'].text != nil
+        location.state = result.elements['//prov'].text if result.elements['//prov'] && result.elements['//prov'].text != nil
+        location.zip = result.elements['//postal'].text if result.elements['//postal'] && result.elements['//postal'].text != nil
+        location.street_address = "#{result.elements['//stnumber'].text} #{result.elements['//staddress'].text}" if result.elements['//stnumber'] && result.elements['//stnumber'].text != nil && result.elements['//staddress'] && result.elements['//staddress'].text != nil
+        location.success = true
+        return location
       end
 
       def self.add_ampersand(url)
